@@ -1,0 +1,22 @@
+{
+  "manifest_version": 2,
+  "name": "NYT Games Helper",
+  "version": "1.0",
+
+  "description": "Adds hints and additional board playability for Connections.",
+
+  "icons": {
+    "48": "icons/icon.png"
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["https://www.nytimes.com/games/connections*"],
+      "js": ["connections.js"]
+    },
+    {
+      "matches": ["https://www.nytimes.com/games/wordle*"],
+      "js": ["wordle.js"]
+    }
+  ]
+}
