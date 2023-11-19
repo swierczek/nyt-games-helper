@@ -13,10 +13,6 @@
     {
       "matches": ["https://www.nytimes.com/games/connections*"],
       "js": ["connections.js"]
-    },
-    {
-      "matches": ["https://www.nytimes.com/games/wordle*"],
-      "js": ["wordle.js"]
     }
   ]
 }
