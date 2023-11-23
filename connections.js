@@ -7,14 +7,47 @@ if (helperWrapper) {
 	helperWrapper.remove();
 }
 
-document.querySelector('#snackbar').insertAdjacentHTML('beforebegin', '<div id="nyt-games-helper" style="text-align:center"></div>');
+let css = `
+#top-text {
+	display: none;
+}
+#nyt-games-helper {
+	text-align: center;
+}
+#nyt-games-helper a {
+	text-decoration: underline;
+	padding: 10px;
+	display: inline-block;
+}
+.item.selected.test {
+	color: red;
+	width: 110%;
+}
+#status-wrapper {
+	padding: 10px;
+	display: block;
+}
+#status {
+	border-radius: 10px;
+	padding: 7px;
+	background: none;
+	transition: all .05s linear;
+}
+#status.updated {
+	background: #eee;
+}
+`;
+
+document.querySelector('head').insertAdjacentHTML('beforeend', '<style>' + css + '</style>');
+
+document.querySelector('#snackbar').insertAdjacentHTML('beforebegin', '<div id="nyt-games-helper"></div>');
 helperWrapper = document.querySelector('#nyt-games-helper');
-helperWrapper.insertAdjacentHTML('beforeend', '<a href="#" style="padding: 10px; display:inline-block" id="free-guess">Free guess</a>');
-helperWrapper.insertAdjacentHTML('beforeend', '<a href="#" style="padding: 10px; display:inline-block" id="reveal-incorrect-item">Reveal incorrect item</a>');
-helperWrapper.insertAdjacentHTML('beforeend', '<a href="#" style="padding: 10px; display:inline-block" id="reveal-group">Reveal next group</a>');
-helperWrapper.insertAdjacentHTML('beforeend', '<a href="#" style="padding: 10px; display:inline-block" id="random-group">Reveal random group</a>');
-helperWrapper.insertAdjacentHTML('beforeend', '<a href="#" style="padding: 10px; display:inline-block" id="different-board">Random previous board</a>');
-helperWrapper.insertAdjacentHTML('beforeend', '<div style="padding: 10px; display:block" id="status"></div>');
+helperWrapper.insertAdjacentHTML('beforeend', '<a href="#" id="free-guess">Free guess</a>');
+helperWrapper.insertAdjacentHTML('beforeend', '<a href="#" id="reveal-incorrect-item">Reveal incorrect item</a>');
+helperWrapper.insertAdjacentHTML('beforeend', '<a href="#" id="reveal-group">Reveal next group</a>');
+helperWrapper.insertAdjacentHTML('beforeend', '<a href="#" id="random-group">Reveal random group</a>');
+helperWrapper.insertAdjacentHTML('beforeend', '<a href="#" id="different-board">Random previous board</a>');
+helperWrapper.insertAdjacentHTML('beforeend', '<div id="status-wrapper"><span id="status"></span></div>');
 
 let status = document.querySelector('#status');
 
@@ -27,30 +60,52 @@ helperWrapper.querySelector('#free-guess').addEventListener('click', (event) => 
 	let selected = getSelectedItems();
 
 	if (selected.length < 4) {
-		status.innerText = 'Select 4 items to make a guess.';
+		updateStatus('Select 4 items to make a guess.');
 		return;
 	}
 
 	for (let key in groups) {
 		if (equalArrays(groups[key].members, selected)) {
-			status.innerText = 'Current selection is a match!';
+			updateStatus('Current selection is a match!');
+			// class can be found via animations.css
+			animate(document.querySelectorAll('.item.selected'), 'solved-pulse', 500);
 			return;
 		} else {
 			// check how many match
-			// status.innerText = 'Current selection is not a match.';
+			// updateStatus('Current selection is not a match.');
 
 			let overlap = arrayIntersect(groups[key].members, selected);
 
 			if (overlap.length === 3) {
-				status.innerText = '3 overlap';
+				updateStatus('3 overlap');
 				return;
 			}
 		}
 	}
 
 	// output the overlap message
-	status.innerText = 'No significant overlap';
+	updateStatus('No significant overlap');
 });
+
+function updateStatus(text) {
+	status.innerText = text;
+	status.classList.add('updated');
+	setTimeout(() => {
+		status.classList.remove('updated');
+	}, 300);
+}
+
+function animate(elements, cssClass, duration) {
+	console.log('elements', elements);
+	elements.forEach((element) => {
+		console.log('element', element);
+		element.classList.add(cssClass);
+
+		setTimeout(() => {
+			element.classList.remove(cssClass);
+		}, duration);
+	});
+}
 
 /**
  * Output the next easiest group
@@ -76,7 +131,7 @@ helperWrapper.querySelector('#reveal-group').addEventListener('click', (event) =
 		nextGroup = keys[3];
 	}
 
-	status.innerText = 'Next group: ' + nextGroup;
+	updateStatus('Next group: ' + nextGroup);
 });
 
 /**
@@ -110,7 +165,7 @@ helperWrapper.querySelector('#random-group').addEventListener('click', (event) =
 
 	let randomGroup = possibleKeys[Math.floor(Math.random() * possibleKeys.length)];
 
-	status.innerText = 'Random group: ' + randomGroup;
+	updateStatus('Random group: ' + randomGroup);
 });
 
 /**
@@ -122,25 +177,34 @@ helperWrapper.querySelector('#reveal-incorrect-item').addEventListener('click', 
 	let selected = getSelectedItems();
 
 	if (selected.length < 4) {
-		status.innerText = 'Select 4 items to continue.';
+		updateStatus('Select 4 items to continue.');
 		return;
 	}
 
 	for (let key in groups) {
 		if (equalArrays(groups[key].members, selected)) {
-			status.innerText = 'Current selection is a match!';
+			updateStatus('Current selection is a match!');
 			return;
 		} else {
 			let overlap = arrayIntersect(groups[key].members, selected);
 
 			if (overlap.length === 3) {
-				status.innerText = arrayDiff(groups[key].members, selected);
+				let item = arrayDiff(groups[key].members, selected);
+				updateStatus(item);
+
+				let element = Array.from(
+					document.querySelectorAll('.item.selected')
+				).find(el => {
+					return el.textContent.trim() == item
+				});
+
+				animate([element], 'invalid-shake', 500);
 				return;
 			}
 		}
 	}
 
-	status.innerText = 'No significant overlap';
+	updateStatus('No significant overlap');
 });
 
 /**
