@@ -31,7 +31,7 @@ let css = `
 	border-radius: 10px;
 	padding: 7px;
 	background: none;
-	transition: all .05s linear;
+	transition: all .4s easeOutExpo;
 }
 #status.updated {
 	background: #eee;
@@ -58,6 +58,7 @@ helperWrapper.querySelector('#free-guess').addEventListener('click', (event) => 
 	event.preventDefault();
 
 	let selected = getSelectedItems();
+	let selectedElements = document.querySelectorAll('.item.selected');
 
 	if (selected.length < 4) {
 		updateStatus('Select 4 items to make a guess.');
@@ -68,7 +69,7 @@ helperWrapper.querySelector('#free-guess').addEventListener('click', (event) => 
 		if (equalArrays(groups[key].members, selected)) {
 			updateStatus('Current selection is a match!');
 			// class can be found via animations.css
-			animate(document.querySelectorAll('.item.selected'), 'solved-pulse', 500);
+			animate(selectedElements, 'solved-pulse', 500);
 			return;
 		} else {
 			// check how many match
@@ -78,34 +79,55 @@ helperWrapper.querySelector('#free-guess').addEventListener('click', (event) => 
 
 			if (overlap.length === 3) {
 				updateStatus('3 overlap');
+				animate(selectedElements, 'short-bounce', 500);
 				return;
 			}
 		}
 	}
 
 	// output the overlap message
+	animate(selectedElements, 'invalid-shake', 500);
 	updateStatus('No significant overlap');
 });
 
-function updateStatus(text) {
-	status.innerText = text;
-	status.classList.add('updated');
-	setTimeout(() => {
-		status.classList.remove('updated');
-	}, 300);
-}
+/**
+ * Reveal the odd-item-out if 3 are in the same group
+ */
+helperWrapper.querySelector('#reveal-incorrect-item').addEventListener('click', (event) => {
+	event.preventDefault();
 
-function animate(elements, cssClass, duration) {
-	console.log('elements', elements);
-	elements.forEach((element) => {
-		console.log('element', element);
-		element.classList.add(cssClass);
+	let selected = getSelectedItems();
 
-		setTimeout(() => {
-			element.classList.remove(cssClass);
-		}, duration);
-	});
-}
+	if (selected.length < 4) {
+		updateStatus('Select 4 items to continue.');
+		return;
+	}
+
+	for (let key in groups) {
+		if (equalArrays(groups[key].members, selected)) {
+			updateStatus('Current selection is a match!');
+			return;
+		} else {
+			let overlap = arrayIntersect(groups[key].members, selected);
+
+			if (overlap.length === 3) {
+				let item = arrayDiff(groups[key].members, selected);
+				updateStatus(item);
+
+				let element = Array.from(
+					document.querySelectorAll('.item.selected')
+				).find(el => {
+					return el.textContent.trim() == item
+				});
+
+				animate([element], 'invalid-shake', 500);
+				return;
+			}
+		}
+	}
+
+	updateStatus('No significant overlap');
+});
 
 /**
  * Output the next easiest group
@@ -169,50 +191,12 @@ helperWrapper.querySelector('#random-group').addEventListener('click', (event) =
 });
 
 /**
- * Reveal the odd-item-out if 3 are in the same group
- */
-helperWrapper.querySelector('#reveal-incorrect-item').addEventListener('click', (event) => {
-	event.preventDefault();
-
-	let selected = getSelectedItems();
-
-	if (selected.length < 4) {
-		updateStatus('Select 4 items to continue.');
-		return;
-	}
-
-	for (let key in groups) {
-		if (equalArrays(groups[key].members, selected)) {
-			updateStatus('Current selection is a match!');
-			return;
-		} else {
-			let overlap = arrayIntersect(groups[key].members, selected);
-
-			if (overlap.length === 3) {
-				let item = arrayDiff(groups[key].members, selected);
-				updateStatus(item);
-
-				let element = Array.from(
-					document.querySelectorAll('.item.selected')
-				).find(el => {
-					return el.textContent.trim() == item
-				});
-
-				animate([element], 'invalid-shake', 500);
-				return;
-			}
-		}
-	}
-
-	updateStatus('No significant overlap');
-});
-
-/**
  * Load a different board (currently a random previous board)
  *
  * TODO: instead of updating it on button click, reveal an input form that
  * has a date picker and/or board # input, a "random" button, and a checkbox indicating
- * only previous boards (or not). Maybe also a "previous" and "next" button.
+ * only previous boards (or not). Maybe also a "previous" and "next" button. And keep track
+ * of solved puzzles via local storage or a cookie.
  */
 helperWrapper.querySelector('#different-board').addEventListener('click', (event) => {
 	event.preventDefault();
@@ -316,7 +300,7 @@ function arrayDiff(arr1, arr2) {
 /**
  * Get all currently selected items in alphabetical order
  *
- * @return array
+ * @return array of strings
  */
 function getSelectedItems() {
 	// get the 4 selections, sort alphabetically, check each group
@@ -330,4 +314,34 @@ function getSelectedItems() {
 	items.sort();
 
 	return items;
+}
+
+/**
+ * Update the status text and toggle the .updated class to animate the background
+ */
+function updateStatus(text) {
+	status.innerText = text;
+	status.classList.add('updated');
+	setTimeout(() => {
+		status.classList.remove('updated');
+	}, 300);
+}
+
+/**
+ * Toggle an animation class for a group of elements
+ *
+ * @param elements to toggle the class on
+ * @param cssClass to toggle
+ * @param duration How long until the class should be removed
+ */
+function animate(elements, cssClass, duration) {
+	console.log('elements', elements);
+	elements.forEach((element) => {
+		console.log('element', element);
+		element.classList.add(cssClass);
+
+		setTimeout(() => {
+			element.classList.remove(cssClass);
+		}, duration);
+	});
 }
