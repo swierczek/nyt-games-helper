@@ -1,5 +1,5 @@
-var index = 0;
-var randomPreviousIndex = 0;
+var todaysGameIndex = 0; // today's game's index
+var currentGameIndex = 0; // current game's index
 var groups = getBoardGroups();
 var completedGames = getCompletedGames();
 
@@ -202,27 +202,31 @@ helperWrapper.querySelector('#different-board').addEventListener('click', (event
 
 	// set the value of today's array to the different board array
 	let allGameData = window.wrappedJSObject.gameData;
-	let randomPreviousIndex = Math.floor(Math.random() * index - 1);
-	allGameData[index] = allGameData[randomPreviousIndex]; // switch to new board
+	currentGameIndex = Math.floor(Math.random() * todaysGameIndex - 1);
+	allGameData[todaysGameIndex] = allGameData[currentGametodaysGameIndex]; // switch to new board
 
 	// export gameData back to window.gameData
 	window.wrappedJSObject.gameData = cloneInto(allGameData, window);
 
 	// update groups so the rest of the extension works with the new groups
-	groups = allGameData[index].groups;
+	groups = allGameData[todaysGameIndex].groups;
 
 	// trigger a focus event which should update the DOM
 	window.dispatchEvent(new Event('focus', { 'bubbles': true }));
 
 	// check if this board has been completed before
-	if (completedGames[randomPreviousIndex] === true) {
-		updateStatus('You have completed this game before.');
+	if (completedGames[currentGameIndex] === true) {
+		updateStatus('Game #' + currentGameIndex + ' - you have completed this game before.');
 	} else {
-		updateStatus('You have not completed this board yet.')
+		updateStatus('Game #' + currentGameIndex + ' - you have not completed this game yet.')
 	}
 
 });
 
+/**
+ * Monitor the #board for DOM changes so we can detect when the game is complete
+ * https://stackoverflow.com/questions/3219758/detect-changes-in-the-dom
+ */
 function observeBoard() {
 	// Select the node that will be observed for mutations
 	var targetNode = document.querySelector('#board');
@@ -236,7 +240,7 @@ function observeBoard() {
 	        if (mutation.type == 'childList' && mutation.addedNodes.length === 1) {
 	        	let classes = mutation.addedNodes[0].classList;
 	        	if (classes.contains('answer-banner') && classes.contains('item-row-3')) {
-		        	markCompleted(randomPreviousIndex);
+		        	markCompleted(currentGameIndex);
 	        	}
 	        }
 	    }
@@ -274,8 +278,8 @@ function getBoardGroups() {
 		options.sort();
 
 		if (equalArrays(options, items)) {
-			index = i;
-			randomPreviousIndex = i;
+			todaysGameIndex = i;
+			currentGameIndex = i;
 			return allGameData[i].groups;
 		}
 	}
