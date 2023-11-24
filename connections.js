@@ -9,38 +9,37 @@ if (helperWrapper) {
 	helperWrapper.remove();
 }
 
-let css = `
-#top-text {
-	display: none;
-}
-#nyt-games-helper {
-	text-align: center;
-}
-#nyt-games-helper a {
-	text-decoration: underline;
-	padding: 10px;
-	display: inline-block;
-}
-.item.selected.test {
-	color: red;
-	width: 110%;
-}
-#status-wrapper {
-	padding: 10px;
-	display: block;
-}
-#status {
-	border-radius: 10px;
-	padding: 7px;
-	background: none;
-	transition: all .4s easeOutExpo;
-}
-#status.updated {
-	background: #eee;
-}
-`;
-
-document.querySelector('head').insertAdjacentHTML('beforeend', '<style>' + css + '</style>');
+document.querySelector('head').insertAdjacentHTML('beforeend',`
+<style>
+	#top-text {
+		display: none;
+	}
+	#nyt-games-helper {
+		text-align: center;
+	}
+	#nyt-games-helper a {
+		text-decoration: underline;
+		padding: 10px;
+		display: inline-block;
+	}
+	.item.selected.test {
+		color: red;
+		width: 110%;
+	}
+	#status-wrapper {
+		padding: 10px;
+		display: block;
+	}
+	#status {
+		border-radius: 10px;
+		padding: 7px;
+		background: none;
+		transition: all .4s easeOutExpo;
+	}
+	#status.updated {
+		background: #eee;
+	}
+</style>`);
 
 document.querySelector('#snackbar').insertAdjacentHTML('beforebegin', '<div id="nyt-games-helper"></div>');
 helperWrapper = document.querySelector('#nyt-games-helper');
