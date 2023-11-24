@@ -1,6 +1,8 @@
 # NYT Games Helper
 
-This is an add-on for Firefox to add hints and the ability to play previous days' boards for the NYT game [Connections](https://www.nytimes.com/games/connections). Future work is planned to add Wordle hints too.
+This is an add-on for Firefox to add hints and the ability to play previous days' boards for the NYT game [Connections](https://www.nytimes.com/games/connections).
+
+<img width="759" alt="image" src="https://github.com/swierczek/nyt-games-helper/assets/2423727/8c2ff596-633e-44a8-8a4b-816b9f67a046">
 
 The add-on is published at https://addons.mozilla.org/en-US/firefox/addon/nyt-games-helper/.
 
