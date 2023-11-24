@@ -72,8 +72,6 @@ helperWrapper.querySelector('#free-guess').addEventListener('click', (event) => 
 			return;
 		} else {
 			// check how many match
-			// updateStatus('Current selection is not a match.');
-
 			let overlap = arrayIntersect(groups[key].members, selected);
 
 			if (overlap.length === 3) {
