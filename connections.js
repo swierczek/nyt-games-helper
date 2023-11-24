@@ -22,10 +22,6 @@ document.querySelector('head').insertAdjacentHTML('beforeend',`
 		padding: 10px;
 		display: inline-block;
 	}
-	.item.selected.test {
-		color: red;
-		width: 110%;
-	}
 	#status-wrapper {
 		padding: 10px;
 		display: block;
