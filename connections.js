@@ -1,5 +1,7 @@
 var index = 0;
+var randomPreviousIndex = 0;
 var groups = getBoardGroups();
+var completedGames = getCompletedGames();
 
 // reset the helper wrapper for debugging purposes
 let helperWrapper = document.querySelector('#nyt-games-helper');
@@ -50,6 +52,8 @@ helperWrapper.insertAdjacentHTML('beforeend', '<a href="#" id="different-board">
 helperWrapper.insertAdjacentHTML('beforeend', '<div id="status-wrapper"><span id="status"></span></div>');
 
 let status = document.querySelector('#status');
+
+observeBoard();
 
 /**
  * Make a free guess with the current selection.
@@ -204,7 +208,7 @@ helperWrapper.querySelector('#different-board').addEventListener('click', (event
 	// set the value of today's array to the different board array
 	let allGameData = window.wrappedJSObject.gameData;
 	let randomPreviousIndex = Math.floor(Math.random() * index - 1);
-	allGameData[index] = allGameData[randomPreviousIndex]; // switch to yesterday's board
+	allGameData[index] = allGameData[randomPreviousIndex]; // switch to new board
 
 	// export gameData back to window.gameData
 	window.wrappedJSObject.gameData = cloneInto(allGameData, window);
@@ -214,7 +218,44 @@ helperWrapper.querySelector('#different-board').addEventListener('click', (event
 
 	// trigger a focus event which should update the DOM
 	window.dispatchEvent(new Event('focus', { 'bubbles': true }));
+
+	// check if this board has been completed before
+	if (completedGames[randomPreviousIndex] === true) {
+		updateStatus('You have completed this game before.');
+	} else {
+		updateStatus('You have not completed this board yet.')
+	}
+
 });
+
+function observeBoard() {
+	// Select the node that will be observed for mutations
+	var targetNode = document.querySelector('#board');
+
+	// Options for the observer (which mutations to observe)
+	var config = { subtree: true, childList: true };
+
+	// Callback function to execute when mutations are observed
+	var callback = function(mutationsList) {
+	    for (let mutation of mutationsList) {
+	        if (mutation.type == 'childList' && mutation.addedNodes.length === 1) {
+	        	let classes = mutation.addedNodes[0].classList;
+	        	if (classes.contains('answer-banner') && classes.contains('item-row-3')) {
+		        	markCompleted(randomPreviousIndex);
+	        	}
+	        }
+	    }
+	};
+
+	// Create an observer instance linked to the callback function
+	var observer = new MutationObserver(callback);
+
+	// Start observing the target node for configured mutations
+	observer.observe(targetNode, config);
+
+	// Later, you can stop observing
+	// observer.disconnect();
+}
 
 /**
  * Get today's board groups
@@ -239,6 +280,7 @@ function getBoardGroups() {
 
 		if (equalArrays(options, items)) {
 			index = i;
+			randomPreviousIndex = i;
 			return allGameData[i].groups;
 		}
 	}
@@ -335,13 +377,33 @@ function updateStatus(text) {
  * @param duration How long until the class should be removed
  */
 function animate(elements, cssClass, duration) {
-	console.log('elements', elements);
 	elements.forEach((element) => {
-		console.log('element', element);
 		element.classList.add(cssClass);
 
 		setTimeout(() => {
 			element.classList.remove(cssClass);
 		}, duration);
 	});
+}
+
+/**
+ * Get an object of all completed games from local storage
+ *
+ * @return object
+ */
+function getCompletedGames() {
+	let completedGames = localStorage.getItem("completedGames");
+
+	return completedGames ? JSON.parse(completedGames) : {};
+}
+
+/**
+ * Mark this index as a completed game in local storage
+ *
+ * @param index int
+ */
+function markCompleted(index) {
+	completedGames[index] = true;
+
+	localStorage.setItem('completedGames', JSON.stringify(completedGames));
 }
