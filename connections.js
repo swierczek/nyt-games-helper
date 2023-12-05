@@ -1,7 +1,11 @@
+const FIRST_CONNECTIONS_DATE = '06-12-2023';
+
 var todaysGameIndex = 0; // today's game's index
 var currentGameIndex = 0; // current game's index
-var groups = getBoardGroups();
+var groups; // initialized in click events
 var completedGames = getCompletedGames();
+
+var dateArray = [];
 
 // reset the helper wrapper for debugging purposes
 let helperWrapper = document.querySelector('#nyt-games-helper');
@@ -56,6 +60,8 @@ observeBoard();
 helperWrapper.querySelector('#free-guess').addEventListener('click', (event) => {
 	event.preventDefault();
 
+	initBoardGroups();
+
 	let selected = getSelectedItems();
 	let selectedElements = document.querySelectorAll('.item.selected');
 
@@ -92,6 +98,8 @@ helperWrapper.querySelector('#free-guess').addEventListener('click', (event) => 
  */
 helperWrapper.querySelector('#reveal-incorrect-item').addEventListener('click', (event) => {
 	event.preventDefault();
+
+	initBoardGroups();
 
 	let selected = getSelectedItems();
 
@@ -132,6 +140,8 @@ helperWrapper.querySelector('#reveal-incorrect-item').addEventListener('click', 
 helperWrapper.querySelector('#reveal-group').addEventListener('click', (event) => {
 	event.preventDefault();
 
+	initBoardGroups();
+
 	let answerBanner0 = document.querySelector('.answer-banner.group-0');
 	let answerBanner1 = document.querySelector('.answer-banner.group-1');
 	let answerBanner2 = document.querySelector('.answer-banner.group-2');
@@ -158,6 +168,8 @@ helperWrapper.querySelector('#reveal-group').addEventListener('click', (event) =
  */
 helperWrapper.querySelector('#random-group').addEventListener('click', (event) => {
 	event.preventDefault();
+
+	initBoardGroups();
 
 	let answerBanner0 = document.querySelector('.answer-banner.group-0');
 	let answerBanner1 = document.querySelector('.answer-banner.group-1');
@@ -192,34 +204,96 @@ helperWrapper.querySelector('#random-group').addEventListener('click', (event) =
  *
  * TODO: instead of updating it on button click, reveal an input form that
  * has a date picker and/or board # input, a "random" button, and a checkbox indicating
- * only previous boards (or not). Maybe also a "previous" and "next" button. And keep track
- * of solved puzzles via local storage or a cookie.
+ * only previous boards (or not). Maybe also a "previous" and "next" button.
+ *
+ * https://www.nytimes.com/svc/connections/v1/2023-06-12.json is the first available date
+ * {"status":"ERROR","errors":["Not Found"],"results":[]} if date isn't defined
  */
 helperWrapper.querySelector('#different-board').addEventListener('click', (event) => {
 	event.preventDefault();
 
-	// set the value of today's array to the different board array
-	let allGameData = window.wrappedJSObject.gameData;
-	currentGameIndex = Math.floor(Math.random() * todaysGameIndex - 1);
-	allGameData[todaysGameIndex] = allGameData[currentGametodaysGameIndex]; // switch to new board
+	initBoardGroups();
 
-	// export gameData back to window.gameData
-	window.wrappedJSObject.gameData = cloneInto(allGameData, window);
+	let min = new Date(FIRST_CONNECTIONS_DATE); // inclusive
+	let max = new Date(); // exclusive
+	let dates = getDateArray(min, max);
 
-	// update groups so the rest of the extension works with the new groups
-	groups = allGameData[todaysGameIndex].groups;
+	// new random index between 1 and (today - 1)
+	let newIndex = Math.floor(Math.random() * dates.length);
 
-	// trigger a focus event which should update the DOM
-	window.dispatchEvent(new Event('focus', { 'bubbles': true }));
+	// get new game data
+	fetch('https://www.nytimes.com/svc/connections/v1/'+dates[newIndex]+'.json')
+	.then((res) => res.json())
+	.then((res) => {
+		if (res.status === 'ERROR') {
+			updateStatus('Failed to regenerate a new board. Try again!');
+		} else if (res.id && res.groups) {
+			currentGameIndex = res.id;
 
-	// check if this board has been completed before
-	if (completedGames[currentGameIndex] === true) {
-		updateStatus('Game #' + currentGameIndex + ' - you have completed this game before.');
-	} else {
-		updateStatus('Game #' + currentGameIndex + ' - you have not completed this game yet.')
+			// set the value of today's array to the different board array
+			let allGameData = window.wrappedJSObject.gameData;
+			allGameData[todaysGameIndex] = res;
+
+			// export gameData back to window.gameData
+			window.wrappedJSObject.gameData = cloneInto(allGameData, window);
+
+			// update groups so the rest of the extension works with the new groups
+			groups = allGameData[todaysGameIndex].groups;
+
+			// trigger a focus event which should update the DOM
+			window.dispatchEvent(new Event('focus', { 'bubbles': true }));
+
+			// check if this board has been completed before
+			if (completedGames[currentGameIndex] === true) {
+				updateStatus('Game #' + currentGameIndex + ' - you have completed this game before.');
+			} else {
+				updateStatus('Game #' + currentGameIndex + ' - you have not completed this game yet.')
+			}
+		}
+	});
+});
+
+/**
+ * Get an array of dates in the format YYYY-MM-DD.
+ * Based on https://stackoverflow.com/a/45068485/1499877
+ *
+ * @param min Date, inclusive
+ * @param max Date, exclusive
+ */
+function getDateArray(min, max) {
+	if (dateArray.length > 0) {
+		return dateArray;
 	}
 
-});
+	var dates = [];
+
+	min.setDate(min.getDate() - 1);
+	max.setDate(max.getDate() - 1);
+
+	while (min < max) {
+		// this line modifies the original min reference which you want to make the while loop work
+		min.setDate(min.getDate() + 1);
+
+		let newDate = new Date(min);
+
+		let thisYear = newDate.getFullYear();
+		let thisMonth = newDate.getMonth() + 1;
+		let thisDate = newDate.getDate();
+
+		let dateString = thisYear
+			+ '-'
+			+ (thisMonth <= 9 ? '0' : '') + thisMonth
+			+ '-'
+			+ (thisDate <= 9 ? '0' : '') + thisDate;
+
+		// this pushes a new date , if you were to push min then you will keep updating every item in the array
+		dates.push(dateString);
+	}
+
+	dateArray = dates;
+
+	return dates;
+}
 
 /**
  * Monitor the #board for DOM changes so we can detect when the game is complete
@@ -255,22 +329,31 @@ function observeBoard() {
 }
 
 /**
- * Get today's board groups
+ * Get today's board groups. The last element of window.gameData
+ * should contain the object we're looking for.
  *
  * @return Object
  */
-function getBoardGroups() {
+function initBoardGroups() {
+	if (typeof groups !== 'undefined') {
+		return;
+	}
+
 	let allGameData = window.wrappedJSObject.gameData;
 	let items = getBoardItems();
 
 	// check all array items in the game data to determine the index of today's puzzle
-	for (let i=0; i<allGameData.length; i++) {
-		let groups = allGameData[i].groups;
+	for (let i=allGameData.length-1; i>=0; i--) {
+		let thisGroups = allGameData[i].groups;
 		let options = [];
 
+		if (!thisGroups) {
+			continue;
+		}
+
 		// add all group members to options
-		for (let key in groups) {
-			options.push(...groups[key].members);
+		for (let key in thisGroups) {
+			options.push(...thisGroups[key].members);
 		}
 
 		options.sort();
@@ -278,7 +361,8 @@ function getBoardGroups() {
 		if (equalArrays(options, items)) {
 			todaysGameIndex = i;
 			currentGameIndex = i;
-			return allGameData[i].groups;
+			groups = allGameData[i].groups;
+			return;
 		}
 	}
 }
