@@ -3,7 +3,6 @@ const FIRST_CONNECTIONS_DATE = '06-12-2023';
 var todaysGameIndex = 0; // today's game's index
 var currentGameIndex = 0; // current game's index
 var groups; // initialized in click events
-var completedGames = getCompletedGames();
 
 var dateArray = [];
 
@@ -12,6 +11,12 @@ let helperWrapper = document.querySelector('#nyt-games-helper');
 if (helperWrapper) {
 	helperWrapper.remove();
 }
+
+let intervalId;
+let status;
+
+initBoardGroups(); // fetch JSON with today's board data
+attachCustomDiv(); // async init of our link bar
 
 document.querySelector('head').insertAdjacentHTML('beforeend',`
 <style>
@@ -41,348 +46,180 @@ document.querySelector('head').insertAdjacentHTML('beforeend',`
 	}
 </style>`);
 
-document.querySelector('#snackbar').insertAdjacentHTML('beforebegin', '<div id="nyt-games-helper"></div>');
-helperWrapper = document.querySelector('#nyt-games-helper');
-helperWrapper.insertAdjacentHTML('beforeend', '<a href="#" id="free-guess">Free guess</a>');
-helperWrapper.insertAdjacentHTML('beforeend', '<a href="#" id="reveal-incorrect-item">Reveal incorrect item</a>');
-helperWrapper.insertAdjacentHTML('beforeend', '<a href="#" id="reveal-group">Reveal next group</a>');
-helperWrapper.insertAdjacentHTML('beforeend', '<a href="#" id="random-group">Reveal random group</a>');
-helperWrapper.insertAdjacentHTML('beforeend', '<a href="#" id="different-board">Random previous board</a>');
-helperWrapper.insertAdjacentHTML('beforeend', '<div id="status-wrapper"><span id="status"></span></div>');
-
-let status = document.querySelector('#status');
-
-observeBoard();
-
-/**
- * Make a free guess with the current selection.
- */
-helperWrapper.querySelector('#free-guess').addEventListener('click', (event) => {
-	event.preventDefault();
-
-	initBoardGroups();
-
-	let selected = getSelectedItems();
-	let selectedElements = document.querySelectorAll('.item.selected');
-
-	if (selected.length < 4) {
-		updateStatus('Select 4 items to make a guess.');
-		return;
-	}
-
-	for (let key in groups) {
-		if (equalArrays(groups[key].members, selected)) {
-			updateStatus('Current selection is a match!');
-			// class can be found via animations.css
-			animate(selectedElements, 'solved-pulse', 500);
-			return;
-		} else {
-			// check how many match
-			let overlap = arrayIntersect(groups[key].members, selected);
-
-			if (overlap.length === 3) {
-				updateStatus('3 overlap');
-				animate(selectedElements, 'short-bounce', 500);
-				return;
-			}
+function attachCustomDiv() {
+	intervalId = setInterval(() => {
+		let board = document.querySelector('#pz-game-root > article > section:last-of-type');
+		if (board) {
+			clearTimeout(intervalId);
+			init();
 		}
-	}
+	}, 500);
+}
 
-	// output the overlap message
-	animate(selectedElements, 'invalid-shake', 500);
-	updateStatus('No significant overlap');
-});
+function init() {
+	document.querySelector('#pz-game-root > article > section:last-of-type').insertAdjacentHTML('afterend', '<div id="nyt-games-helper"></div>');
+	helperWrapper = document.querySelector('#nyt-games-helper');
+	helperWrapper.insertAdjacentHTML('beforeend', '<a href="#" id="free-guess">Free guess</a>');
+	helperWrapper.insertAdjacentHTML('beforeend', '<a href="#" id="reveal-group">Reveal next group</a>');
+	helperWrapper.insertAdjacentHTML('beforeend', '<a href="#" id="random-group">Reveal random group</a>');
+	helperWrapper.insertAdjacentHTML('beforeend', '<div id="status-wrapper"><span id="status"></span></div>');
 
-/**
- * Reveal the odd-item-out if 3 are in the same group
- */
-helperWrapper.querySelector('#reveal-incorrect-item').addEventListener('click', (event) => {
-	event.preventDefault();
+	status = document.querySelector('#status');
 
-	initBoardGroups();
+	/**
+	 * Make a free guess with the current selection.
+	 */
+	helperWrapper.querySelector('#free-guess').addEventListener('click', (event) => {
+		event.preventDefault();
 
-	let selected = getSelectedItems();
+		let selected = getSelectedItems();
+		let selectedElements = document.querySelectorAll('input[checked]');
+		let selectedCells = [];
 
-	if (selected.length < 4) {
-		updateStatus('Select 4 items to continue.');
-		return;
-	}
+		selectedElements.forEach((element) => {
+			selectedCells.push(element.parentNode);
+		});
 
-	for (let key in groups) {
-		if (equalArrays(groups[key].members, selected)) {
-			updateStatus('Current selection is a match!');
+		if (selected.length < 4) {
+			updateStatus('Select 4 items to make a guess.');
 			return;
-		} else {
-			let overlap = arrayIntersect(groups[key].members, selected);
-
-			if (overlap.length === 3) {
-				let item = arrayDiff(groups[key].members, selected);
-				updateStatus(item);
-
-				let element = Array.from(
-					document.querySelectorAll('.item.selected')
-				).find(el => {
-					return el.textContent.trim() == item
-				});
-
-				animate([element], 'invalid-shake', 500);
-				return;
-			}
 		}
-	}
 
-	updateStatus('No significant overlap');
-});
+		for(let i=0; i<groups.length; i++) {
+			let cards = [];
 
-/**
- * Output the next easiest group
- */
-helperWrapper.querySelector('#reveal-group').addEventListener('click', (event) => {
-	event.preventDefault();
+			groups[i].cards.forEach((card) => {
+				cards.push(card.content);
+			});
 
-	initBoardGroups();
+			cards.sort();
 
-	let answerBanner0 = document.querySelector('.answer-banner.group-0');
-	let answerBanner1 = document.querySelector('.answer-banner.group-1');
-	let answerBanner2 = document.querySelector('.answer-banner.group-2');
-	let answerBanner3 = document.querySelector('.answer-banner.group-3');
-
-	let keys = Object.keys(groups);
-
-	let nextGroup = '';
-	if (!answerBanner0) {
-		nextGroup = keys[0];
-	} else if (!answerBanner1) {
-		nextGroup = keys[1];
-	} else if (!answerBanner2) {
-		nextGroup = keys[2];
-	} else if (!answerBanner3) {
-		nextGroup = keys[3];
-	}
-
-	updateStatus('Next group: ' + nextGroup);
-});
-
-/**
- * Output a random unsolved group
- */
-helperWrapper.querySelector('#random-group').addEventListener('click', (event) => {
-	event.preventDefault();
-
-	initBoardGroups();
-
-	let answerBanner0 = document.querySelector('.answer-banner.group-0');
-	let answerBanner1 = document.querySelector('.answer-banner.group-1');
-	let answerBanner2 = document.querySelector('.answer-banner.group-2');
-	let answerBanner3 = document.querySelector('.answer-banner.group-3');
-
-	let keys = Object.keys(groups);
-
-	let possibleKeys = [];
-
-	let nextGroup = '';
-	if (!answerBanner0) {
-		possibleKeys.push(keys[0]);
-	}
-	if (!answerBanner1) {
-		possibleKeys.push(keys[1]);
-	}
-	if (!answerBanner2) {
-		possibleKeys.push(keys[2]);
-	}
-	if (!answerBanner3) {
-		possibleKeys.push(keys[3]);
-	}
-
-	let randomGroup = possibleKeys[Math.floor(Math.random() * possibleKeys.length)];
-
-	updateStatus('Random group: ' + randomGroup);
-});
-
-/**
- * Load a different board (currently a random previous board)
- *
- * TODO: instead of updating it on button click, reveal an input form that
- * has a date picker and/or board # input, a "random" button, and a checkbox indicating
- * only previous boards (or not). Maybe also a "previous" and "next" button.
- *
- * https://www.nytimes.com/svc/connections/v1/2023-06-12.json is the first available date
- * {"status":"ERROR","errors":["Not Found"],"results":[]} if date isn't defined
- */
-helperWrapper.querySelector('#different-board').addEventListener('click', (event) => {
-	event.preventDefault();
-
-	initBoardGroups();
-
-	let min = new Date(FIRST_CONNECTIONS_DATE); // inclusive
-	let max = new Date(); // exclusive
-	let dates = getDateArray(min, max);
-
-	// new random index between 1 and (today - 1)
-	let newIndex = Math.floor(Math.random() * dates.length);
-
-	// get new game data
-	fetch('https://www.nytimes.com/svc/connections/v1/'+dates[newIndex]+'.json')
-	.then((res) => res.json())
-	.then((res) => {
-		if (res.status === 'ERROR') {
-			updateStatus('Failed to regenerate a new board. Try again!');
-		} else if (res.id && res.groups) {
-			currentGameIndex = res.id;
-
-			// set the value of today's array to the different board array
-			let allGameData = window.wrappedJSObject.gameData;
-			allGameData[todaysGameIndex] = res;
-
-			// export gameData back to window.gameData
-			window.wrappedJSObject.gameData = cloneInto(allGameData, window);
-
-			// update groups so the rest of the extension works with the new groups
-			groups = allGameData[todaysGameIndex].groups;
-
-			// trigger a focus event which should update the DOM
-			window.dispatchEvent(new Event('focus', { 'bubbles': true }));
-
-			// check if this board has been completed before
-			if (completedGames[currentGameIndex] === true) {
-				updateStatus('Game #' + currentGameIndex + ' - you have completed this game before.');
+			if (equalArrays(cards, selected)) {
+				updateStatus('Current selection is a match!');
+				// class can be found via animations.css
+				animate(selectedCells, 'solved-pulse', 500);
+				return;
 			} else {
-				updateStatus('Game #' + currentGameIndex + ' - you have not completed this game yet.')
+				// check how many match
+				let overlap = arrayIntersect(cards, selected);
+
+				if (overlap.length === 3) {
+					let item = arrayDiff(cards, selected);
+					updateStatus('3 overlap - ' + item);
+
+					let element = Array.from(
+						document.querySelectorAll('input[checked]')
+					).find(el => {
+						return el.value.trim() == item
+					});
+
+					animate([element.parentNode], 'short-bounce', 500);
+					return;
+				}
 			}
-		}
+		};
+
+		// output the overlap message
+		animate(selectedCells, 'invalid-shake', 500);
+		updateStatus('No significant overlap');
 	});
-});
 
-/**
- * Get an array of dates in the format YYYY-MM-DD.
- * Based on https://stackoverflow.com/a/45068485/1499877
- *
- * @param min Date, inclusive
- * @param max Date, exclusive
- */
-function getDateArray(min, max) {
-	if (dateArray.length > 0) {
-		return dateArray;
-	}
+	/**
+	 * Output the next easiest group
+	 */
+	helperWrapper.querySelector('#reveal-group').addEventListener('click', (event) => {
+		event.preventDefault();
 
-	var dates = [];
+		let answerBanner0 = getAnswerBannerWithText(groups[0].title);
+		let answerBanner1 = getAnswerBannerWithText(groups[1].title);
+		let answerBanner2 = getAnswerBannerWithText(groups[2].title);
+		let answerBanner3 = getAnswerBannerWithText(groups[3].title);
 
-	min.setDate(min.getDate() - 1);
-	max.setDate(max.getDate() - 1);
+		let nextGroup = '';
+		if (!answerBanner0) {
+			nextGroup = groups[0].title;
+		} else if (!answerBanner1) {
+			nextGroup = groups[1].title;
+		} else if (!answerBanner2) {
+			nextGroup = groups[2].title;
+		} else if (!answerBanner3) {
+			nextGroup = groups[3].title;
+		}
 
-	while (min < max) {
-		// this line modifies the original min reference which you want to make the while loop work
-		min.setDate(min.getDate() + 1);
+		updateStatus('Next group: ' + nextGroup);
+	});
 
-		let newDate = new Date(min);
+	/**
+	 * Output a random unsolved group
+	 */
+	helperWrapper.querySelector('#random-group').addEventListener('click', (event) => {
+		event.preventDefault();
 
-		let thisYear = newDate.getFullYear();
-		let thisMonth = newDate.getMonth() + 1;
-		let thisDate = newDate.getDate();
+		let answerBanner0 = getAnswerBannerWithText(groups[0].title);
+		let answerBanner1 = getAnswerBannerWithText(groups[1].title);
+		let answerBanner2 = getAnswerBannerWithText(groups[2].title);
+		let answerBanner3 = getAnswerBannerWithText(groups[3].title);
 
-		let dateString = thisYear
-			+ '-'
-			+ (thisMonth <= 9 ? '0' : '') + thisMonth
-			+ '-'
-			+ (thisDate <= 9 ? '0' : '') + thisDate;
+		let possibleKeys = [];
 
-		// this pushes a new date , if you were to push min then you will keep updating every item in the array
-		dates.push(dateString);
-	}
+		if (!answerBanner0) {
+			possibleKeys.push(groups[0].title);
+		}
+		if (!answerBanner1) {
+			possibleKeys.push(groups[1].title);
+		}
+		if (!answerBanner2) {
+			possibleKeys.push(groups[2].title);
+		}
+		if (!answerBanner3) {
+			possibleKeys.push(groups[3].title);
+		}
 
-	dateArray = dates;
+		let randomGroup = possibleKeys[Math.floor(Math.random() * possibleKeys.length)];
 
-	return dates;
+		updateStatus('Random group: ' + randomGroup);
+	});
 }
 
 /**
- * Monitor the #board for DOM changes so we can detect when the game is complete
- * https://stackoverflow.com/questions/3219758/detect-changes-in-the-dom
- */
-function observeBoard() {
-	// Select the node that will be observed for mutations
-	var targetNode = document.querySelector('#board');
-
-	// Options for the observer (which mutations to observe)
-	var config = { subtree: true, childList: true };
-
-	// Callback function to execute when mutations are observed
-	var callback = function(mutationsList) {
-	    for (let mutation of mutationsList) {
-	        if (mutation.type == 'childList' && mutation.addedNodes.length === 1) {
-	        	let classes = mutation.addedNodes[0].classList;
-	        	if (classes.contains('answer-banner') && classes.contains('item-row-3')) {
-		        	markCompleted(currentGameIndex);
-	        	}
-	        }
-	    }
-	};
-
-	// Create an observer instance linked to the callback function
-	var observer = new MutationObserver(callback);
-
-	// Start observing the target node for configured mutations
-	observer.observe(targetNode, config);
-
-	// Later, you can stop observing
-	// observer.disconnect();
-}
-
-/**
- * Get today's board groups. The last element of window.gameData
- * should contain the object we're looking for.
- *
- * @return Object
+ * Initialize today's board groups by fetching the same JSON their JS uses
  */
 function initBoardGroups() {
-	if (typeof groups !== 'undefined') {
-		return;
-	}
+	let today = new Date();
+	let dd = String(today.getDate()).padStart(2, '0');
+	let mm = String(today.getMonth() + 1).padStart(2, '0'); //January is 0!
+	let yyyy = today.getFullYear();
 
-	let allGameData = window.wrappedJSObject.gameData;
-	let items = getBoardItems();
+	let dateString = yyyy + '-' + mm + '-' + dd;
 
-	// check all array items in the game data to determine the index of today's puzzle
-	for (let i=allGameData.length-1; i>=0; i--) {
-		let thisGroups = allGameData[i].groups;
-		let options = [];
-
-		if (!thisGroups) {
-			continue;
-		}
-
-		// add all group members to options
-		for (let key in thisGroups) {
-			options.push(...thisGroups[key].members);
-		}
-
-		options.sort();
-
-		if (equalArrays(options, items)) {
-			todaysGameIndex = i;
-			currentGameIndex = i;
-			groups = allGameData[i].groups;
-			return;
-		}
-	}
+	fetch('https://www.nytimes.com/svc/connections/v2/'+dateString+'.json')
+	.then((res) => res.json())
+	.then((res) => {
+		groups = res.categories;
+	});
 }
 
-/**
- * Get all items on today's board
- *
- * @return array
- */
-function getBoardItems() {
-	let itemElements = document.querySelectorAll('.item');
-	let items = [];
+function getBoardData() {
+	let today = new Date();
+	let dd = String(today.getDate()).padStart(2, '0');
+	let mm = String(today.getMonth() + 1).padStart(2, '0'); //January is 0!
+	let yyyy = today.getFullYear();
 
-	itemElements.forEach((item) => {
-		items.push(item.innerText);
+	let dateString = yyyy + '-' + mm + '-' + dd;
+
+	fetch('https://www.nytimes.com/svc/connections/v2/'+dateString+'.json')
+	.then((res) => res.json())
+	.then((res) => {
+		return res.categories;
 	});
+}
 
-	items.sort();
-
-	return items;
+function getAnswerBannerWithText(text) {
+	for (const a of document.querySelectorAll("h3[class^='SolvedCategory']")) {
+		if (a.textContent.includes(text)) {
+	    	return a;
+		}
+	}
 }
 
 /**
@@ -426,12 +263,12 @@ function arrayDiff(arr1, arr2) {
  * @return array of strings
  */
 function getSelectedItems() {
-	// get the 4 selections, sort alphabetically, check each group
-	let selected = document.querySelectorAll('.item.selected');
+	// get the 4 selections, sort alphabetically
+	let selected = document.querySelectorAll('input[checked]');
 
 	let items = [];
 	selected.forEach((item) => {
-		items.push(item.innerText);
+		items.push(item.value);
 	});
 
 	items.sort();
@@ -465,26 +302,4 @@ function animate(elements, cssClass, duration) {
 			element.classList.remove(cssClass);
 		}, duration);
 	});
-}
-
-/**
- * Get an object of all completed games from local storage
- *
- * @return object
- */
-function getCompletedGames() {
-	let completedGames = localStorage.getItem("completedGames");
-
-	return completedGames ? JSON.parse(completedGames) : {};
-}
-
-/**
- * Mark this index as a completed game in local storage
- *
- * @param index int
- */
-function markCompleted(index) {
-	completedGames[index] = true;
-
-	localStorage.setItem('completedGames', JSON.stringify(completedGames));
 }
